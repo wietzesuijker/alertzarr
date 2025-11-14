@@ -29,18 +29,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      minio:
-        image: bitnami/minio:latest
-        env:
-          MINIO_ROOT_USER: autopilot
-          MINIO_ROOT_PASSWORD: autopilot123
-        ports:
-          - 9000:9000
-        options: >-
-          --health-cmd "mc ping local || true"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     env:
       RABBITMQ_URL: amqp://guest:guest@localhost:5672/
       MINIO_ENDPOINT: http://localhost:9000
@@ -51,6 +39,25 @@ jobs:
       STAC_BUCKET: autopilot-stac
     steps:
       - uses: actions/checkout@v4
+
+      - name: Start MinIO service
+        run: |
+          docker run -d \
+            --name minio \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER=autopilot \
+            -e MINIO_ROOT_PASSWORD=autopilot123 \
+            minio/minio server /data
+          for i in {1..20}; do
+            if curl -sf http://localhost:9000/minio/health/ready >/dev/null; then
+              echo "MinIO is ready"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "MinIO failed to start" >&2
+          docker logs minio >&2 || true
+          exit 1
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -86,3 +93,7 @@ jobs:
         with:
           name: alertzarr-run-report
           path: local/run_reports/*.json
+
+      - name: Stop MinIO service
+        if: always()
+        run: docker rm -f minio || true
