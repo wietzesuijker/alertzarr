@@ -26,6 +26,7 @@ The GeoZarr artefact is intentionally minimal today; it demonstrates where downs
 - Query the **EODC STAC API** for Sentinel-2 L2A Zarr v2 assets (the same API response also includes thumbnails/true-color previews for context).
 - Run real GeoZarr conversions via `eopf-geozarr`, writing outputs to MinIO/S3 (with an explicit placeholder fallback when no EODC Zarr is available).
 - Generate STAC Item JSON and upload it to MinIO alongside derived assets.
+- Emit TiTiler-ready viewer + TileJSON links whenever `TITILER_BASE_URL` is configured so you can open the converted GeoZarr immediately.
 - Emit a run summary with timestamps, source scene metadata, and output URLs.
 
 The intent of this repository is to demonstrate an end-to-end, automation-ready path from disaster alert ingestion to **real GeoZarr artefacts built from the EODC catalog**. Keeping scene discovery fully within the EODC STAC ecosystem ensures reproducible metadata, consistent permissions, and fewer moving parts.
@@ -104,6 +105,9 @@ AlertZarr can now reuse the **EODC sentinel-2-l2a Zarr v2 corpus** to produce re
    export MINIO_ENDPOINT=http://localhost:9000
    export MINIO_ROOT_USER=autopilot
    export MINIO_ROOT_PASSWORD=autopilot123
+   # Optional TiTiler integration (local server example shown below)
+   export TITILER_BASE_URL=http://127.0.0.1:8080
+   export TITILER_TILE_MATRIX_SET=WebMercatorQuad
    ```
 
    Adjust the env vars if you are writing to a remote S3 bucket or a different STAC catalog.
@@ -121,9 +125,30 @@ AlertZarr can now reuse the **EODC sentinel-2-l2a Zarr v2 corpus** to produce re
 
 Internally the flow matches the production `data-pipeline` implementation: AlertZarr queries the EODC STAC API, resolves the public Zarr v2 asset in `s3://esa-zarr-sentinel-explorer-fra`, and streams it through `eopf-geozarr` to build GeoZarr multiscales. This keeps the demo realistic today while we prepare for the Zarr v3 / GeoZarr-native sources the EODC catalog will expose next.
 
+### Preview the GeoZarr with TiTiler-EOPF
+
+AlertZarr now emits viewer metadata whenever you set `TITILER_BASE_URL`. Point that variable at an existing TiTiler-EOPF deployment, or just run the bundled service with Docker Compose:
+
+```bash
+make titiler  # starts ghcr.io/eopf-explorer/titiler-eopf with the same MinIO creds
+```
+
+Back in the `alertzarr` repo, set `TITILER_BASE_URL=http://127.0.0.1:8080` and rerun the CLI. Successful real conversions now add a `viewer` and `tilejson` asset to the STAC Item plus a `conversion.viewer` block inside the run report. Share those URLs with your TiTiler deployment to get instant RGB previews of the freshly produced GeoZarr store.
+
 ## Run from GitHub Actions
 
-Use the `Demo AlertZarr` workflow (`.github/workflows/demo.yml`) to execute the same steps on a GitHub-hosted runner. Trigger it via **Actions → Demo AlertZarr → Run workflow**, choose a sample alert, and download the uploaded `alertzarr-run-report` artifact for the resulting summary JSON. Scene search now runs by default so the report lists real Sentinel-2 candidates; uncheck the input if you want to force the older offline placeholder mode.
+Use the `Demo AlertZarr` workflow (`.github/workflows/demo.yml`) to execute the same steps on a GitHub-hosted runner. Trigger it via **Actions → Demo AlertZarr → Run workflow** and pick:
+
+- `alert` / `hazard`: which sample payload to run.
+- `run-scene-search`: leave enabled to hit the EODC STAC API.
+- `conversion-mode`: defaults to `real` so the workflow always builds a GeoZarr (falling back only if no scenes are found).
+- `titiler-base-url` (optional): point at a reachable TiTiler deployment to embed viewer + TileJSON links in the artifacts. Leave blank to skip.
+- `titiler-tile-matrix-set`: override if your TiTiler uses something other than `WebMercatorQuad`.
+
+Each run uploads two artifacts:
+
+1. `alertzarr-run-report` – the structured run summary from `local/run_reports`.
+2. `alertzarr-stac-items` – any STAC Items written to the MinIO `autopilot-stac` bucket during the run, downloaded back via the workflow for convenience.
 
 ## Next Steps
 - Replace sample alerts with live API polling and webhook integrations.
@@ -190,4 +215,4 @@ Use these reports to feed dashboards, attach to Slack alerts, or trigger downstr
 - Real conversion currently targets **Sentinel-2 L2A Zarr v2** scenes exposed via the EODC catalog. If none intersect the alert AOI, AlertZarr falls back to the previous JSON stub so the run still produces a STAC Item.
 - Scene discovery relies on the EODC STAC API and remains best-effort. Network errors simply log a warning and continue.
 - The pipeline targets the sample Copernicus alerts included in `data/sample_alerts/`. Bring your own alerts by dropping JSON files with the same schema.
-- Titiler visualisation is not bundled yet; consume the generated STAC Item + GeoZarr metadata with your own viewers.
+- TiTiler visualisation requires a reachable `TITILER_BASE_URL`. Provide one (local or remote) so AlertZarr can emit working viewer + TileJSON links.

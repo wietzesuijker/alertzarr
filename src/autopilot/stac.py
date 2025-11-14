@@ -39,6 +39,42 @@ def build_stac_item(
         }
     ]
 
+    if output.viewer:
+        assets["viewer"] = {
+            "href": output.viewer.viewer_url,
+            "type": "text/html",
+            "roles": ["overview", "metadata"],
+            "title": "Interactive TiTiler viewer",
+        }
+        assets["tilejson"] = {
+            "href": output.viewer.tilejson_url,
+            "type": "application/json",
+            "roles": ["metadata", "tilejson"],
+            "title": f"TileJSON ({output.viewer.tile_matrix_set})",
+        }
+        links.extend(
+            [
+                {
+                    "rel": "preview",
+                    "href": output.viewer.viewer_url,
+                    "type": "text/html",
+                    "title": "TiTiler viewer",
+                },
+                {
+                    "rel": "tilejson",
+                    "href": output.viewer.tilejson_url,
+                    "type": "application/json",
+                    "title": f"TileJSON ({output.viewer.tile_matrix_set})",
+                },
+                {
+                    "rel": "info",
+                    "href": output.viewer.info_url,
+                    "type": "application/json",
+                    "title": "TiTiler dataset metadata",
+                },
+            ]
+        )
+
     if output.scenes:
         assets.update(_scene_assets(output.scenes))
         links.extend(_scene_links(output.scenes))

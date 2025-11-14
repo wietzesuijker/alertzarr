@@ -60,6 +60,15 @@ class RunReporter:
                     "preview_href": output.scenes[0].preview_href,
                 }
             )
+        if output.viewer:
+            self.steps["conversion"]["viewer"] = {
+                "collection": output.viewer.collection_id,
+                "item": output.viewer.item_id,
+                "tile_matrix_set": output.viewer.tile_matrix_set,
+                "viewer_url": output.viewer.viewer_url,
+                "tilejson_url": output.viewer.tilejson_url,
+                "info_url": output.viewer.info_url,
+            }
 
     def record_stac_item(self, stac_item: dict[str, Any]) -> None:
         self.steps["stac_item"] = {

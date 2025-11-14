@@ -1,29 +1,47 @@
 {
-  "id": "COP_EMS_2025_004211",
-  "title": "Copernicus Emergency Management Service: Central Italy Flood Activation",
-  "description": "Slow-moving storms have triggered flash flooding between Rome and Pescara. Rapid mapping requested for flood extent analysis along the Liri River basin.",
-  "issued": "2025-09-22T08:00:00Z",
-  "areaOfInterest": {
-    "type": "Polygon",
-    "coordinates": [
-      [
-        [12.5688, 42.4269],
-        [13.9031, 42.4474],
-        [13.92, 41.4587],
-        [12.6061, 41.4388],
-        [12.5688, 42.4269]
-      ]
-    ]
-  },
-  "severity": "Severe",
-  "hazardType": "flood",
-  "source": {
-    "name": "Copernicus EMS",
-    "url": "https://emergency.copernicus.eu/mapping/list-of-components/EMSR123"
-  },
-  "parameters": {
-    "priority": "high",
-    "requestedLayers": ["flood_extent", "water_depth"],
-    "notes": "First assessment required within 12 hours."
-  }
+    "id": "COP_EMS_2025_004211",
+    "title": "Copernicus Emergency Management Service: Central Italy Flood Activation",
+    "description": "Slow-moving storms have triggered flash flooding between Rome and Pescara. Rapid mapping requested for flood extent analysis along the Liri River basin.",
+    "issued": "2025-09-22T08:00:00Z",
+    "areaOfInterest": {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [
+                    12.5688,
+                    42.4269
+                ],
+                [
+                    13.9031,
+                    42.4474
+                ],
+                [
+                    13.92,
+                    41.4587
+                ],
+                [
+                    12.6061,
+                    41.4388
+                ],
+                [
+                    12.5688,
+                    42.4269
+                ]
+            ]
+        ]
+    },
+    "severity": "Severe",
+    "hazardType": "flood",
+    "source": {
+        "name": "Copernicus EMS",
+        "url": "https://emergency.copernicus.eu/mapping/list-of-components/EMSR123"
+    },
+    "parameters": {
+        "priority": "high",
+        "requestedLayers": [
+            "flood_extent",
+            "water_depth"
+        ],
+        "notes": "First assessment required within 12 hours."
+    }
 }

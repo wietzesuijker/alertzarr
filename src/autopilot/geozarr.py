@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -27,6 +28,17 @@ LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
+class ViewerLinks:
+    collection_id: str
+    item_id: str
+    base_url: str
+    tile_matrix_set: str
+    viewer_url: str
+    tilejson_url: str
+    info_url: str
+
+
+@dataclass
 class ConversionOutput:
     alert_id: str
     bucket: str
@@ -35,6 +47,7 @@ class ConversionOutput:
     bytes_written: int
     duration_seconds: float
     scenes: list[SceneSummary] = field(default_factory=list)
+    viewer: ViewerLinks | None = None
 
 
 ConversionMode = Literal["auto", "real", "simulate"]
@@ -119,10 +132,15 @@ async def _attempt_real_conversion(alert: LoadedAlert) -> ConversionOutput | Non
 
     selected = sorted(candidate_scenes, key=_scene_sort_key, reverse=True)[0]
     start = time.perf_counter()
-    output_uri, key, bytes_written = await asyncio.to_thread(
-        _convert_scene, alert, selected, settings
-    )
+    (
+        output_uri,
+        key,
+        bytes_written,
+        collection_id,
+        item_id,
+    ) = await asyncio.to_thread(_convert_scene, alert, selected, settings)
     duration = time.perf_counter() - start
+    viewer = _build_viewer_links(settings, collection_id, item_id)
     return ConversionOutput(
         alert_id=alert.id,
         bucket=settings.geozarr_bucket,
@@ -131,19 +149,17 @@ async def _attempt_real_conversion(alert: LoadedAlert) -> ConversionOutput | Non
         bytes_written=bytes_written,
         duration_seconds=duration,
         scenes=[selected],
+        viewer=viewer,
     )
 
 
 def _convert_scene(
     alert: LoadedAlert, scene: SceneSummary, settings
-) -> tuple[str, str, int]:
+) -> tuple[str, str, int, str, str]:
     if not scene.zarr_href:
         raise RuntimeError("Selected scene does not provide a Zarr asset")
 
-    key = (
-        f"{settings.converter_output_prefix}/{alert.model.hazard_type}/"
-        f"{alert.id}/{scene.id}.zarr"
-    )
+    key, collection_id, item_id = _build_output_layout(alert, scene, settings)
     output_uri = f"s3://{settings.geozarr_bucket}/{key}"
     source_storage = get_storage_options(
         scene.zarr_href,
@@ -181,7 +197,51 @@ def _convert_scene(
 
     bytes_written = _calculate_total_size(settings.geozarr_bucket, key, settings)
     LOGGER.info("GeoZarr written to %s (%s bytes)", output_uri, bytes_written)
-    return output_uri, key, bytes_written
+    return output_uri, key, bytes_written, collection_id, item_id
+
+
+def _build_output_layout(
+    alert: LoadedAlert, scene: SceneSummary, settings
+) -> tuple[str, str, str]:
+    collection_raw = alert.model.hazard_type or settings.converter_collection
+    collection_id = _slugify(collection_raw)
+    slug = _slugify(f"{alert.id}-{scene.id}")
+    prefix = settings.converter_output_prefix.strip("/")
+    parts = [part for part in (prefix, collection_id) if part]
+    key_prefix = "/".join(parts) if parts else collection_id
+    key = f"{key_prefix}/{slug}.zarr"
+    return key, collection_id, slug
+
+
+def _build_viewer_links(
+    settings, collection_id: str, item_id: str
+) -> ViewerLinks | None:
+    if not settings.titiler_base_url:
+        return None
+    base_url = settings.titiler_base_url.rstrip("/")
+    tile_matrix = settings.titiler_tile_matrix_set
+    root = f"{base_url}/collections/{collection_id}/items/{item_id}"
+    return ViewerLinks(
+        collection_id=collection_id,
+        item_id=item_id,
+        base_url=base_url,
+        tile_matrix_set=tile_matrix,
+        viewer_url=f"{root}/viewer",
+        tilejson_url=f"{root}/{tile_matrix}/tilejson.json",
+        info_url=f"{root}/info",
+    )
+
+
+_SLUG_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def _slugify(value: str) -> str:
+    text = str(value).strip()
+    if not text:
+        return "artifact"
+    cleaned = _SLUG_PATTERN.sub("-", text)
+    cleaned = cleaned.strip("-")
+    return cleaned or "artifact"
 
 
 def _calculate_total_size(bucket: str, key: str, settings) -> int:

@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     eodc_s3_endpoint: str = "https://s3.de.io.cloud.ovh.net"
     eodc_s3_region: str = "gra"
     eodc_zarr_asset_keys: list[str] = Field(default_factory=lambda: ["product", "zarr"])
+    titiler_base_url: str | None = None
+    titiler_tile_matrix_set: str = "WebMercatorQuad"
 
 
 @lru_cache(maxsize=1)
