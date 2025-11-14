@@ -1,4 +1,5 @@
 """Run reporting helpers."""
+
 from __future__ import annotations
 
 import json
@@ -13,7 +14,6 @@ from shapely.geometry import shape
 
 from .alerts import LoadedAlert
 from .geozarr import ConversionOutput
-
 
 GEOD = Geod(ellps="WGS84")
 
@@ -32,7 +32,8 @@ class RunReporter:
 
     def record_alert(self, alert: LoadedAlert) -> None:
         self.alert_id = alert.id
-        area_km2 = _area_km2(alert.model.area_of_interest)
+        geometry = getattr(alert.model, "area_of_interest", None)
+        area_km2 = _area_km2(geometry) if geometry else None
         self.steps["alert"] = {
             "id": alert.id,
             "issued": alert.model.issued,
@@ -87,7 +88,9 @@ class RunReporter:
         return path
 
 
-def _area_km2(geometry: dict[str, Any]) -> float:
+def _area_km2(geometry: dict[str, Any]) -> float | None:
+    if not geometry:
+        return None
     geom = shape(geometry)
     area, _ = GEOD.geometry_area_perimeter(geom)
     return round(abs(area) / 1_000_000, 2)

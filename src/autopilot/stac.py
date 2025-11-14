@@ -1,4 +1,5 @@
 """STAC item generation for GeoZarr alert outputs."""
+
 from __future__ import annotations
 
 import json
@@ -14,7 +15,9 @@ from .geozarr import ConversionOutput
 from .settings import get_settings
 
 
-def build_stac_item(alert: LoadedAlert, output: ConversionOutput, bucket: str) -> dict[str, Any]:
+def build_stac_item(
+    alert: LoadedAlert, output: ConversionOutput, bucket: str
+) -> dict[str, Any]:
     geometry = alert.model.area_of_interest
     geom = shape(geometry)
     bbox = list(geom.bounds)
@@ -59,7 +62,9 @@ def build_stac_item(alert: LoadedAlert, output: ConversionOutput, bucket: str) -
     }
 
 
-async def create_stac_item(alert: LoadedAlert, output: ConversionOutput) -> dict[str, Any]:
+async def create_stac_item(
+    alert: LoadedAlert, output: ConversionOutput
+) -> dict[str, Any]:
     settings = get_settings()
     stac_item = build_stac_item(alert, output, settings.stac_bucket)
 

@@ -1,4 +1,5 @@
 """Utilities for discovering real Sentinel-2 scenes that overlap an alert AOI."""
+
 from __future__ import annotations
 
 import logging
@@ -48,7 +49,12 @@ def _parse_datetime(value: str) -> datetime:
 def _format_datetime(value: datetime) -> str:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return (
+        value.astimezone(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
 
 async def fetch_recent_scenes(
@@ -98,9 +104,11 @@ async def fetch_recent_scenes(
     for feature in data.get("features", []):
         assets = feature.get("assets", {})
         preview = (
-            (assets.get("thumbnail") or assets.get("overview") or assets.get("preview") or {})
-            .get("href")
-        )
+            assets.get("thumbnail")
+            or assets.get("overview")
+            or assets.get("preview")
+            or {}
+        ).get("href")
         data_asset = (
             assets.get("visual")
             or assets.get("true_color")
@@ -113,7 +121,9 @@ async def fetch_recent_scenes(
             SceneSummary(
                 id=feature.get("id", "unknown"),
                 collection=feature.get("collection", DEFAULT_COLLECTIONS[0]),
-                datetime=feature.get("properties", {}).get("datetime", issued.isoformat()),
+                datetime=feature.get("properties", {}).get(
+                    "datetime", issued.isoformat()
+                ),
                 cloud_cover=feature.get("properties", {}).get("eo:cloud_cover"),
                 preview_href=preview,
                 data_href=data_href,

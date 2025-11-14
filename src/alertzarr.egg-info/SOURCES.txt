@@ -8,6 +8,7 @@ src/alertzarr.egg-info/requires.txt
 src/alertzarr.egg-info/top_level.txt
 src/autopilot/__init__.py
 src/autopilot/alerts.py
+src/autopilot/catalog.py
 src/autopilot/cli.py
 src/autopilot/events.py
 src/autopilot/geozarr.py

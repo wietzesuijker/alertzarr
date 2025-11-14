@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from autopilot.geozarr import ConversionOutput
 from autopilot.reporting import RunReporter
 
@@ -35,3 +38,31 @@ def test_run_reporter_tracks_steps() -> None:
     assert summary["run_id"] == "test-run"
     assert summary["alert_id"] == "alert-1"
     assert summary["steps"]["stac_item"]["id"] == "alert-1-geozarr"
+
+
+def test_run_reporter_persist_writes_file(tmp_path: Path) -> None:
+    reporter = RunReporter(run_id="persist-test")
+    reporter.start_run()
+
+    class FakeAlert:
+        id = "alert-2"
+
+        class Model:
+            issued = "2025-02-01T00:00:00Z"
+            hazard_type = "wildfire"
+            severity = "Moderate"
+            area_of_interest = {
+                "type": "Polygon",
+                "coordinates": [[[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]]],
+            }
+
+        model = Model()
+
+    reporter.record_alert(FakeAlert())
+    reporter.finish_run()
+    output_path = reporter.persist(tmp_path)
+
+    assert output_path.exists()
+    data = json.loads(output_path.read_text())
+    assert data["run_id"] == "persist-test"
+    assert data["steps"]["alert"]["id"] == "alert-2"

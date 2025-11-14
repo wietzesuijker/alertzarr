@@ -1,4 +1,5 @@
 """Placeholder GeoZarr conversion logic used by the local pipeline."""
+
 from __future__ import annotations
 
 import json

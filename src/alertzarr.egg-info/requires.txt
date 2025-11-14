@@ -8,3 +8,4 @@ rich>=13.8
 shapely>=2.0
 python-json-logger>=2.0
 orjson>=3.10
+pyproj>=3.6

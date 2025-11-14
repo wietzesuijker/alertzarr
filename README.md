@@ -67,11 +67,14 @@ The stack stays deliberately compact: RabbitMQ, MinIO, and Postgres run via `doc
      --alert sample_alerts/copernicus_flood.json \
      --hazard flood
    ```
+   Each invocation writes a run summary JSON under `local/run_reports/<run_id>.json` by default.
+   Use `--report-dir /custom/path` to override the destination.
 
 6. **Inspect results**
    - MinIO: http://localhost:9001 (default creds `autopilot/autopilot123`)
    - RabbitMQ: http://localhost:15672 (`guest/guest`)
    - STAC Item: see path logged in the run summary.
+   - Run summaries: `local/run_reports/<run_id>.json` (or the directory passed via `--report-dir`).
 
 ## Next Steps
 - Replace sample alerts with live API polling and webhook integrations.
