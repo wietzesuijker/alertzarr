@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     converter_min_dimension: int = 256
     converter_tile_width: int = 256
     converter_enable_sharding: bool = True
-    eodc_stac_api: str = "https://api.explorer.eopf.copernicus.eu/stac"
+    eodc_stac_api: str = "https://stac.core.eopf.eodc.eu"
     eodc_collection: str = "sentinel-2-l2a"
     eodc_cloud_cover: int = 40
     eodc_results_limit: int = 3

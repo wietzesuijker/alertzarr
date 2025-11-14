@@ -1,17 +1,17 @@
 {
-  "id": "COP_EMS_2025_001337",
-  "title": "Copernicus Emergency Management Service: Danube Flood Activation",
-  "description": "Persistent rainfall and upstream snowmelt have caused major flooding along the Danube near Budapest, Hungary. Rapid mapping requested for flood extent analysis.",
-  "issued": "2025-09-10T09:30:00Z",
+  "id": "COP_EMS_2025_004211",
+  "title": "Copernicus Emergency Management Service: Central Italy Flood Activation",
+  "description": "Slow-moving storms have triggered flash flooding between Rome and Pescara. Rapid mapping requested for flood extent analysis along the Liri River basin.",
+  "issued": "2025-09-22T08:00:00Z",
   "areaOfInterest": {
     "type": "Polygon",
     "coordinates": [
       [
-        [19.0, 47.1],
-        [19.4, 47.1],
-        [19.4, 47.4],
-        [19.0, 47.4],
-        [19.0, 47.1]
+        [12.5688, 42.4269],
+        [13.9031, 42.4474],
+        [13.92, 41.4587],
+        [12.6061, 41.4388],
+        [12.5688, 42.4269]
       ]
     ]
   },

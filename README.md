@@ -99,7 +99,7 @@ AlertZarr can now reuse the **EODC sentinel-2-l2a Zarr v2 corpus** to produce re
 
    ```bash
    export REAL_CONVERSION_ENABLED=true
-   export EODC_STAC_API=https://api.explorer.eopf.copernicus.eu/stac
+   export EODC_STAC_API=https://stac.core.eopf.eodc.eu
    export EODC_S3_ENDPOINT=https://s3.de.io.cloud.ovh.net
    export MINIO_ENDPOINT=http://localhost:9000
    export MINIO_ROOT_USER=autopilot
