@@ -1,0 +1,87 @@
+"""CLI entry point for the alert-to-product pipeline."""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from pathlib import Path
+
+import click
+from rich.console import Console
+from rich.table import Table
+
+from .alerts import load_alert
+from .events import publish_alert_event
+from .geozarr import simulate_conversion
+from .reporting import RunReporter
+from .stac import create_stac_item
+
+LOGGER = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+CONSOLE = Console()
+
+
+async def orchestrate(alert_path: Path, hazard: str, run_id: str | None = None) -> None:
+    reporter = RunReporter(run_id=run_id)
+    reporter.start_run()
+
+    alert = load_alert(alert_path)
+    reporter.record_alert(alert)
+    CONSOLE.print(f"Loaded alert [bold]{alert.id}[/bold] for hazard [green]{hazard}[/green]")
+
+    await publish_alert_event(alert)
+    reporter.record_event_publish()
+    CONSOLE.print("Published alert to RabbitMQ")
+
+    geozarr_output = await simulate_conversion(alert)
+    reporter.record_conversion(geozarr_output)
+    CONSOLE.print(f"Simulated GeoZarr conversion at {geozarr_output.s3_uri}")
+
+    stac_item = await create_stac_item(alert, geozarr_output)
+    reporter.record_stac_item(stac_item)
+    CONSOLE.print(f"Created STAC Item: {stac_item['id']}")
+
+    reporter.finish_run()
+    CONSOLE.print("[bold green]Pipeline completed successfully[/bold green]")
+
+    table = Table(title="Run Summary")
+    table.add_column("Step")
+    table.add_column("Value")
+
+    for key, value in reporter.summary().items():
+        if isinstance(value, (dict, list)):
+            rendered = json.dumps(value, indent=2)
+        else:
+            rendered = str(value)
+        table.add_row(key, rendered)
+
+    CONSOLE.print(table)
+
+
+@click.command()
+@click.option(
+    "--alert",
+    "alert_relative",
+    type=str,
+    required=True,
+    help="Relative path under data/sample_alerts/",
+)
+@click.option("--hazard", type=str, required=True, help="Hazard type (flood, wildfire, etc.)")
+@click.option("--run-id", type=str, default=None, help="Optional run id override")
+@click.option(
+    "--project-root",
+    type=click.Path(path_type=Path),
+    default=Path(__file__).resolve().parents[2],
+    help="Project root path",
+)
+def main(alert_relative: str, hazard: str, run_id: str | None, project_root: Path) -> None:
+    data_root = project_root / "data" / "sample_alerts"
+    alert_path = data_root / alert_relative
+    if not alert_path.exists():
+        raise SystemExit(f"Alert file not found: {alert_path}")
+
+    asyncio.run(orchestrate(alert_path, hazard, run_id))
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()
