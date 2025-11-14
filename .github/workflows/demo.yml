@@ -6,7 +6,7 @@ on:
       alert:
         description: Sample alert path under data/sample_alerts/
         required: true
-        default: sample_alerts/copernicus_flood.json
+        default: copernicus_flood.json
       hazard:
         description: Hazard type label
         required: true

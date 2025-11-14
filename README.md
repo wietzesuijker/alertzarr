@@ -64,9 +64,10 @@ RabbitMQ, MinIO, and Postgres run via `docker-compose`, and the CLI (`alertzarr`
 5. **Run the pipeline**
    ```bash
    uv run alertzarr \
-     --alert sample_alerts/copernicus_flood.json \
+       --alert copernicus_flood.json \
      --hazard flood
    ```
+   The `--alert` flag is relative to `data/sample_alerts/`.
    Each invocation writes a run summary JSON under `local/run_reports/<run_id>.json` by default.
    Use `--report-dir /custom/path` to override the destination.
 
