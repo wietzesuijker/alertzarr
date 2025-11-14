@@ -50,6 +50,7 @@ class RunReporter:
             "s3_uri": output.s3_uri,
             "duration_seconds": round(output.duration_seconds, 2),
             "bytes_written": output.bytes_written,
+            "mode": "real" if output.key.endswith(".zarr") else "simulate",
         }
         if output.scenes:
             self.steps["conversion"].update(

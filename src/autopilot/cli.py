@@ -13,7 +13,7 @@ from rich.table import Table
 
 from .alerts import load_alert
 from .events import publish_alert_event
-from .geozarr import simulate_conversion
+from .geozarr import ConversionMode, convert_alert
 from .reporting import RunReporter
 from .stac import create_stac_item
 
@@ -30,6 +30,7 @@ async def orchestrate(
     run_id: str | None = None,
     no_scene_search: bool = False,
     report_dir: Path | None = None,
+    conversion_mode: ConversionMode = "auto",
 ) -> None:
     reporter = RunReporter(run_id=run_id)
     reporter.start_run()
@@ -44,11 +45,17 @@ async def orchestrate(
     reporter.record_event_publish()
     CONSOLE.print("Published alert to RabbitMQ")
 
-    geozarr_output = await simulate_conversion(
-        alert, include_scene_search=not no_scene_search
-    )
+    try:
+        geozarr_output = await convert_alert(
+            alert,
+            include_scene_search=not no_scene_search,
+            mode=conversion_mode,
+        )
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
     reporter.record_conversion(geozarr_output)
-    CONSOLE.print(f"Simulated GeoZarr conversion at {geozarr_output.s3_uri}")
+    artifact = "GeoZarr" if geozarr_output.key.endswith(".zarr") else "placeholder JSON"
+    CONSOLE.print(f"Wrote {artifact} artefact to {geozarr_output.s3_uri}")
     scene_count = len(geozarr_output.scenes)
     if scene_count:
         scene_ids = ", ".join(scene.id for scene in geozarr_output.scenes)
@@ -114,6 +121,13 @@ async def orchestrate(
     default=None,
     help="Directory for persisted run summaries (defaults to local/run_reports)",
 )
+@click.option(
+    "--conversion-mode",
+    type=click.Choice(["auto", "real", "simulate"], case_sensitive=False),
+    default="auto",
+    show_default=True,
+    help="auto uses real conversion when enabled, otherwise simulate",
+)
 def main(
     alert_relative: str,
     hazard: str,
@@ -121,6 +135,7 @@ def main(
     project_root: Path,
     no_scene_search: bool,
     report_dir: Path | None,
+    conversion_mode: ConversionMode,
 ) -> None:
     data_root = project_root / "data" / "sample_alerts"
     alert_path = data_root / alert_relative
@@ -137,6 +152,7 @@ def main(
             run_id,
             no_scene_search=no_scene_search,
             report_dir=target_report_dir,
+            conversion_mode=conversion_mode,
         )
     )
 

@@ -1,9 +1,9 @@
 # AlertZarr
 
-AlertZarr ingests disaster alerts, looks up recent Sentinel-2 scenes over the AOI, writes a **placeholder** GeoZarr payload to MinIO, and emits a STAC Item + run report you can hand to downstream tooling. Run it locally or pull the container published to `ghcr.io/wietzesuijker/alertzarr`. The pipeline produces:
+AlertZarr ingests disaster alerts, looks up recent Sentinel-2 scenes over the AOI, and either converts the freshest **EODC Zarr v2** scene to GeoZarr (via `eopf-geozarr`) or falls back to the original placeholder artefact. It always emits a STAC Item + run report you can hand to downstream tooling. Run it locally or pull the container published to `ghcr.io/wietzesuijker/alertzarr`. The pipeline produces:
 
 1. Normalised disaster alerts from sample feeds.
-2. Simulated GeoZarr conversion artefacts.
+2. Real GeoZarr conversion artefacts (or a clearly-labelled placeholder when real data is unavailable).
 3. Generated STAC Items that reference the produced data.
 4. A run report capturing timing, status, and links for downstream consumers.
 
@@ -13,8 +13,8 @@ RabbitMQ, MinIO, and Postgres run via `docker-compose`, and the CLI (`alertzarr`
 
 1. **Load & normalise the alert** (`autopilot.alerts`). AOI polygons and hazard metadata are validated via Pydantic.
 2. **Publish a CloudEvents message** (`autopilot.events`) to RabbitMQ so other systems can react.
-3. **Discover up to two recent Sentinel-2 scenes** (`autopilot.catalog`) intersecting the AOI (Earth-Search API, 7-day lookback, configurable cloud-cover threshold).
-4. **Write a placeholder GeoZarr JSON** (`autopilot.geozarr`) into MinIO that captures the alert metadata plus any discovered scenes. This is a stand-in for a future real conversion step.
+3. **Discover up to two recent Sentinel-2 scenes** (`autopilot.catalog`) intersecting the AOI (Earth-Search API + EODC STAC search, configurable cloud-cover threshold).
+4. **Convert the freshest EODC Zarr v2 scene to GeoZarr** (`autopilot.geozarr`) via `eopf-geozarr`, writing the multiscale store to MinIO. If no Zarr scene is available, a placeholder JSON artefact is produced so downstream steps still succeed.
 5. **Generate a STAC Item** (`autopilot.stac`) that references the GeoZarr artefact and links to the source scenes.
 6. **Persist a run report** (`autopilot.reporting`) detailing timing, AOI size, and output URIs.
 
@@ -88,6 +88,36 @@ The GeoZarr artefact is intentionally minimal today; it demonstrates where downs
    - STAC Item: see path logged in the run summary.
    - Run summaries: `local/run_reports/<run_id>.json` (or the directory passed via `--report-dir`).
 
+## Real GeoZarr conversion (EODC Zarr v2)
+
+AlertZarr can now reuse the **EODC sentinel-2-l2a Zarr v2 corpus** to produce real GeoZarr stores using the upstream `eopf-geozarr` library. Toggle it via environment or CLI:
+
+1. Configure access (defaults work for the public EODC bucket + local MinIO):
+
+   ```bash
+   export REAL_CONVERSION_ENABLED=true
+   export EODC_STAC_API=https://api.explorer.eopf.copernicus.eu/stac
+   export EODC_S3_ENDPOINT=https://s3.de.io.cloud.ovh.net
+   export MINIO_ENDPOINT=http://localhost:9000
+   export MINIO_ROOT_USER=autopilot
+   export MINIO_ROOT_PASSWORD=autopilot123
+   ```
+
+   Adjust the env vars if you are writing to a remote S3 bucket or a different STAC catalog.
+
+2. Run the CLI with `--conversion-mode real` (or leave it on `auto`, which will attempt real conversion and fall back to the placeholder when needed):
+
+   ```bash
+   uv run alertzarr \
+       --alert copernicus_flood.json \
+       --hazard flood \
+       --conversion-mode real
+   ```
+
+3. Inspect the MinIO bucket: the artefact now ends with `.zarr`, `report.json` notes `"mode": "real"`, and the STAC Item advertises an `application/vnd+zarr` asset pointing at the converted store.
+
+Internally the flow matches the production `data-pipeline` implementation: AlertZarr queries the EODC STAC API, resolves the public Zarr v2 asset in `s3://esa-zarr-sentinel-explorer-fra`, and streams it through `eopf-geozarr` to build GeoZarr multiscales. This keeps the demo realistic today while we prepare for the Zarr v3 / GeoZarr-native sources the EODC catalog will expose next.
+
 ## Run from GitHub Actions
 
 Use the `Demo AlertZarr` workflow (`.github/workflows/demo.yml`) to execute the same steps on a GitHub-hosted runner. Trigger it via **Actions → Demo AlertZarr → Run workflow**, choose a sample alert, and download the uploaded `alertzarr-run-report` artifact for the resulting summary JSON.
@@ -154,7 +184,7 @@ Use these reports to feed dashboards, attach to Slack alerts, or trigger downstr
 
 ## Current scope & limitations
 
-- The GeoZarr artefact is a JSON stub, not a full raster conversion. Swap `autopilot.geozarr.simulate_conversion` with a real converter when ready.
-- Scene discovery hits Earth-Search and is best-effort. Network errors simply log a warning and continue.
+- Real conversion currently targets **Sentinel-2 L2A Zarr v2** scenes exposed via the EODC catalog. If none intersect the alert AOI, AlertZarr falls back to the previous JSON stub so the run still produces a STAC Item.
+- Scene discovery uses both Earth-Search and the EODC STAC API and remains best-effort. Network errors simply log a warning and continue.
 - The pipeline targets the sample Copernicus alerts included in `data/sample_alerts/`. Bring your own alerts by dropping JSON files with the same schema.
 - Titiler visualisation is not bundled yet; consume the generated STAC Item + GeoZarr metadata with your own viewers.

@@ -23,11 +23,12 @@ def build_stac_item(
     bbox = list(geom.bounds)
     item_id = f"{alert.id}-geozarr"
     now = datetime.utcnow().isoformat() + "Z"
+    is_zarr_store = output.key.endswith(".zarr")
     assets: dict[str, Any] = {
         "geozarr": {
             "href": output.s3_uri,
-            "type": "application/json",
-            "roles": ["data", "zarr"],
+            "type": "application/vnd+zarr" if is_zarr_store else "application/json",
+            "roles": ["data", "zarr"] if is_zarr_store else ["data"],
         }
     }
     links: list[dict[str, Any]] = [
