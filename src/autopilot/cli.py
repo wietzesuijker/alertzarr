@@ -63,7 +63,7 @@ async def orchestrate(
             f"Found {scene_count} Sentinel scene(s) intersecting the AOI: {scene_ids}"
         )
     else:
-        CONSOLE.print("No Sentinel-2 scenes met the search criteria in the past 7 days")
+        CONSOLE.print("No Sentinel-2 scenes matched the EODC search criteria")
 
     stac_item = await create_stac_item(alert, geozarr_output)
     reporter.record_stac_item(stac_item)

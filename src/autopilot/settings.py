@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     eodc_collection: str = "sentinel-2-l2a"
     eodc_cloud_cover: int = 40
     eodc_results_limit: int = 3
-    eodc_days_lookback: int = 7
+    eodc_days_lookback: int = 10
     eodc_s3_endpoint: str = "https://s3.de.io.cloud.ovh.net"
     eodc_s3_region: str = "gra"
     eodc_zarr_asset_keys: list[str] = Field(default_factory=lambda: ["product", "zarr"])

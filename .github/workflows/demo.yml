@@ -14,7 +14,7 @@ on:
       run-scene-search:
         description: Include Sentinel scene search (requires internet)
         type: boolean
-        default: false
+        default: true
 
 jobs:
   demo:
@@ -76,8 +76,6 @@ jobs:
         run: uv run python infra/bootstrap_minio.py
 
       - name: Run AlertZarr pipeline
-        env:
-          ALERTZARR_NO_SCENE_SEARCH: ${{ inputs.run-scene-search != true }}
         run: |
           SCENE_FLAG=""
           if [ "${{ inputs.run-scene-search }}" != "true" ]; then

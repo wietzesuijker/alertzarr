@@ -19,7 +19,7 @@ from eopf_geozarr import create_geozarr_dataset
 from eopf_geozarr.conversion.fs_utils import get_storage_options
 
 from .alerts import LoadedAlert
-from .catalog import SceneSummary, fetch_eodc_scenes, fetch_recent_scenes
+from .catalog import SceneSummary, fetch_eodc_scenes
 from .settings import get_settings
 
 
@@ -70,7 +70,7 @@ async def simulate_conversion(
     key = f"alerts/{alert.model.hazard_type}/{alert.id}/geozarr-placeholder.json"
     scenes: list[SceneSummary] = []
     if include_scene_search:
-        scenes = await fetch_recent_scenes(alert)
+        scenes = await fetch_eodc_scenes(alert, limit=2)
     payload: dict[str, object] = {
         "alert_id": alert.id,
         "hazard": alert.model.hazard_type,
