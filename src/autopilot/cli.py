@@ -49,6 +49,14 @@ async def orchestrate(
     )
     reporter.record_conversion(geozarr_output)
     CONSOLE.print(f"Simulated GeoZarr conversion at {geozarr_output.s3_uri}")
+    scene_count = len(geozarr_output.scenes)
+    if scene_count:
+        scene_ids = ", ".join(scene.id for scene in geozarr_output.scenes)
+        CONSOLE.print(
+            f"Found {scene_count} Sentinel scene(s) intersecting the AOI: {scene_ids}"
+        )
+    else:
+        CONSOLE.print("No Sentinel-2 scenes met the search criteria in the past 7 days")
 
     stac_item = await create_stac_item(alert, geozarr_output)
     reporter.record_stac_item(stac_item)
