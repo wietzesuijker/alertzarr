@@ -91,3 +91,16 @@ The stack stays deliberately compact: RabbitMQ, MinIO, and Postgres run via `doc
    ```
 
 AlertZarr is intentionally lean yet functional—ideal for piloting with stakeholders before hardening into production infrastructure or deploying from `wietzesuijker/alertzarr` straight to GHCR.
+
+## Publishing & GHCR Flow
+
+- **Push to GitHub**: commits to `main` (or version tags like `v0.2.0`) trigger `.github/workflows/build.yml`. No extra secrets are required because the workflow uses `${{ secrets.GITHUB_TOKEN }}` to authenticate to GHCR.
+- **CI stages**: lint (`ruff`), tests (`pytest`), then Docker build + push. Pull requests build but skip pushing the container image.
+- **Image tags**: successful pushes publish `ghcr.io/wietzesuijker/alertzarr:${GITHUB_SHA}` and `ghcr.io/wietzesuijker/alertzarr:latest`.
+- **Using the image**:
+   ```bash
+   docker pull ghcr.io/wietzesuijker/alertzarr:latest
+   docker run --rm ghcr.io/wietzesuijker/alertzarr:latest --help
+   ```
+
+If you fork the repo, adjust the workflow tags/owner and ensure `packages: write` permissions stay enabled so your GitHub token can push to your GHCR namespace.
