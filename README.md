@@ -1,13 +1,13 @@
 # AlertZarr
 
-AlertZarr turns disaster alerts into ready-to-serve GeoZarr and STAC artefacts using lightweight local services. Run it locally or as a container built automatically via GitHub Actions + GHCR under `ghcr.io/wietzesuijker/alertzarr`. The pipeline produces:
+AlertZarr turns disaster alerts into ready-to-serve GeoZarr and STAC artefacts using RabbitMQ, MinIO, and a Python CLI. Run it locally or pull the container published to `ghcr.io/wietzesuijker/alertzarr`. The pipeline produces:
 
 1. Normalised disaster alerts from sample feeds.
 2. Simulated GeoZarr conversion artefacts.
 3. Generated STAC Items that reference the produced data.
 4. A run report capturing timing, status, and links for downstream consumers.
 
-The stack stays deliberately compact: RabbitMQ, MinIO, and Postgres run via `docker-compose`, while the Python pipeline coordinates the alert-to-product flow. Environment variables live in `.env` (copy `.env.example`), and the included CLI (`alertzarr`) keeps execution repeatable. GitHub Actions mirrors `data-pipeline`'s build-to-GHCR approach so `main` and tagged releases automatically publish container images. When it is time to scale, the same concepts port to Argo Workflows, managed object stores, and live alert feeds.
+RabbitMQ, MinIO, and Postgres run via `docker-compose`, and the CLI (`alertzarr`) coordinates the alert-to-product flow. Configuration lives in `.env` (copy `.env.example`). GitHub Actions builds + pushes container images from `main` and tags, mirroring the `data-pipeline` release flow. The same execution steps map to hosted queues/object stores or Argo Workflows when deployed elsewhere.
 
 ## Features
 - Fetch & normalise sample Copernicus/GDACS alerts.
@@ -76,6 +76,10 @@ The stack stays deliberately compact: RabbitMQ, MinIO, and Postgres run via `doc
    - STAC Item: see path logged in the run summary.
    - Run summaries: `local/run_reports/<run_id>.json` (or the directory passed via `--report-dir`).
 
+## Run from GitHub Actions
+
+Use the `Demo AlertZarr` workflow (`.github/workflows/demo.yml`) to execute the same steps on a GitHub-hosted runner. Trigger it via **Actions → Demo AlertZarr → Run workflow**, choose a sample alert, and download the uploaded `alertzarr-run-report` artifact for the resulting summary JSON.
+
 ## Next Steps
 - Replace sample alerts with live API polling and webhook integrations.
 - Swap the conversion stub with real `eopf-geozarr` workflows and Argo templates.
@@ -92,8 +96,6 @@ The stack stays deliberately compact: RabbitMQ, MinIO, and Postgres run via `doc
    docker build -t alertzarr:local .
    docker run --rm alertzarr:local --help
    ```
-
-AlertZarr is intentionally lean yet functional—ideal for piloting with stakeholders before hardening into production infrastructure or deploying from `wietzesuijker/alertzarr` straight to GHCR.
 
 ## Publishing & GHCR Flow
 

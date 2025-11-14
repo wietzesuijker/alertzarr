@@ -1,0 +1,89 @@
+name: Demo AlertZarr
+
+on:
+  workflow_dispatch:
+    inputs:
+      alert:
+        description: Sample alert path under data/sample_alerts/
+        required: true
+        default: sample_alerts/copernicus_flood.json
+      hazard:
+        description: Hazard type label
+        required: true
+        default: flood
+      run-scene-search:
+        description: Include Sentinel scene search (requires internet)
+        type: boolean
+        default: false
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    services:
+      rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: autopilot
+          MINIO_ROOT_PASSWORD: autopilot123
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "mc ping local || true"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        command: server /data --console-address :9001
+    env:
+      RABBITMQ_URL: amqp://guest:guest@localhost:5672/
+      MINIO_ENDPOINT: http://localhost:9000
+      MINIO_ACCESS_KEY: autopilot
+      MINIO_SECRET_KEY: autopilot123
+      MINIO_REGION: us-east-1
+      GEOZARR_BUCKET: autopilot-geozarr
+      STAC_BUCKET: autopilot-stac
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        run: |
+          uv sync
+          uv sync --group dev
+
+      - name: Seed MinIO buckets
+        run: uv run python infra/bootstrap_minio.py
+
+      - name: Run AlertZarr pipeline
+        env:
+          ALERTZARR_NO_SCENE_SEARCH: ${{ inputs.run-scene-search != true }}
+        run: |
+          SCENE_FLAG=""
+          if [ "${{ inputs.run-scene-search }}" != "true" ]; then
+            SCENE_FLAG="--no-scene-search"
+          fi
+          uv run alertzarr \
+            --alert ${{ inputs.alert }} \
+            --hazard ${{ inputs.hazard }} \
+            $SCENE_FLAG
+
+      - name: Upload run report
+        uses: actions/upload-artifact@v4
+        with:
+          name: alertzarr-run-report
+          path: local/run_reports/*.json

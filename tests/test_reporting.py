@@ -31,7 +31,9 @@ def test_run_reporter_tracks_steps() -> None:
             duration_seconds=1.23,
         )
     )
-    reporter.record_stac_item({"id": "alert-1-geozarr", "links": [{"href": "s3://bucket/item.json"}]})
+    reporter.record_stac_item(
+        {"id": "alert-1-geozarr", "links": [{"href": "s3://bucket/item.json"}]}
+    )
     reporter.finish_run()
 
     summary = reporter.summary()
