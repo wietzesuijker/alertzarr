@@ -21,7 +21,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 CONSOLE = Console()
 
 
-async def orchestrate(alert_path: Path, hazard: str, run_id: str | None = None) -> None:
+async def orchestrate(
+    alert_path: Path,
+    hazard: str,
+    run_id: str | None = None,
+    no_scene_search: bool = False,
+) -> None:
     reporter = RunReporter(run_id=run_id)
     reporter.start_run()
 
@@ -33,7 +38,7 @@ async def orchestrate(alert_path: Path, hazard: str, run_id: str | None = None) 
     reporter.record_event_publish()
     CONSOLE.print("Published alert to RabbitMQ")
 
-    geozarr_output = await simulate_conversion(alert)
+    geozarr_output = await simulate_conversion(alert, include_scene_search=not no_scene_search)
     reporter.record_conversion(geozarr_output)
     CONSOLE.print(f"Simulated GeoZarr conversion at {geozarr_output.s3_uri}")
 
@@ -69,18 +74,30 @@ async def orchestrate(alert_path: Path, hazard: str, run_id: str | None = None) 
 @click.option("--hazard", type=str, required=True, help="Hazard type (flood, wildfire, etc.)")
 @click.option("--run-id", type=str, default=None, help="Optional run id override")
 @click.option(
+    "--no-scene-search",
+    is_flag=True,
+    default=False,
+    help="Disable searching for overlapping Sentinel scenes",
+)
+@click.option(
     "--project-root",
     type=click.Path(path_type=Path),
     default=Path(__file__).resolve().parents[2],
     help="Project root path",
 )
-def main(alert_relative: str, hazard: str, run_id: str | None, project_root: Path) -> None:
+def main(
+    alert_relative: str,
+    hazard: str,
+    run_id: str | None,
+    project_root: Path,
+    no_scene_search: bool,
+) -> None:
     data_root = project_root / "data" / "sample_alerts"
     alert_path = data_root / alert_relative
     if not alert_path.exists():
         raise SystemExit(f"Alert file not found: {alert_path}")
 
-    asyncio.run(orchestrate(alert_path, hazard, run_id))
+    asyncio.run(orchestrate(alert_path, hazard, run_id, no_scene_search=no_scene_search))
 
 
 if __name__ == "__main__":  # pragma: no cover

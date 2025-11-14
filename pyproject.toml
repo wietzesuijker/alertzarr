@@ -15,12 +15,14 @@ dependencies = [
     "shapely>=2.0",
     "python-json-logger>=2.0",
     "orjson>=3.10",
+    "pyproj>=3.6",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.3",
     "ruff>=0.6",
+    "pytest-asyncio>=0.23",
 ]
 
 [project.scripts]

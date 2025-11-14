@@ -1,13 +1,21 @@
 """Run reporting helpers."""
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
+
+from pyproj import Geod
+from shapely.geometry import shape
 
 from .alerts import LoadedAlert
 from .geozarr import ConversionOutput
+
+
+GEOD = Geod(ellps="WGS84")
 
 
 @dataclass
@@ -24,11 +32,13 @@ class RunReporter:
 
     def record_alert(self, alert: LoadedAlert) -> None:
         self.alert_id = alert.id
+        area_km2 = _area_km2(alert.model.area_of_interest)
         self.steps["alert"] = {
             "id": alert.id,
             "issued": alert.model.issued,
             "hazard": alert.model.hazard_type,
             "severity": alert.model.severity,
+            "area_km2": area_km2,
         }
 
     def record_event_publish(self) -> None:
@@ -40,6 +50,14 @@ class RunReporter:
             "duration_seconds": round(output.duration_seconds, 2),
             "bytes_written": output.bytes_written,
         }
+        if output.scenes:
+            self.steps["conversion"].update(
+                {
+                    "source_scene_ids": [scene.id for scene in output.scenes],
+                    "source_scene_count": len(output.scenes),
+                    "preview_href": output.scenes[0].preview_href,
+                }
+            )
 
     def record_stac_item(self, stac_item: dict[str, Any]) -> None:
         self.steps["stac_item"] = {
@@ -61,3 +79,15 @@ class RunReporter:
             "duration_seconds": round(duration, 2),
             "steps": self.steps,
         }
+
+    def persist(self, directory: Path) -> Path:
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{self.run_id}.json"
+        path.write_text(json.dumps(self.summary(), indent=2), encoding="utf-8")
+        return path
+
+
+def _area_km2(geometry: dict[str, Any]) -> float:
+    geom = shape(geometry)
+    area, _ = GEOD.geometry_area_perimeter(geom)
+    return round(abs(area) / 1_000_000, 2)

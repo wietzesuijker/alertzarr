@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from aiobotocore.session import get_session
 
 from .alerts import LoadedAlert
+from .catalog import SceneSummary, fetch_recent_scenes
 from .settings import get_settings
 
 
@@ -19,21 +20,31 @@ class ConversionOutput:
     s3_uri: str
     bytes_written: int
     duration_seconds: float
+    scenes: list[SceneSummary] = field(default_factory=list)
 
 
-async def simulate_conversion(alert: LoadedAlert) -> ConversionOutput:
+async def simulate_conversion(
+    alert: LoadedAlert,
+    include_scene_search: bool = True,
+) -> ConversionOutput:
     start = time.perf_counter()
     session = get_session()
     settings = get_settings()
 
     key = f"alerts/{alert.model.hazard_type}/{alert.id}/geozarr-placeholder.json"
+    scenes: list[SceneSummary] = []
+    if include_scene_search:
+        scenes = await fetch_recent_scenes(alert)
     payload: dict[str, object] = {
         "alert_id": alert.id,
         "hazard": alert.model.hazard_type,
         "description": alert.model.description,
         "aoi": alert.model.area_of_interest,
-    "notes": "Placeholder dataset produced by the local AlertZarr pipeline.",
+        "notes": "Placeholder dataset produced by the local AlertZarr pipeline.",
     }
+
+    if scenes:
+        payload["source_scenes"] = [scene.as_dict() for scene in scenes]
 
     async with session.create_client(
         "s3",
@@ -58,4 +69,5 @@ async def simulate_conversion(alert: LoadedAlert) -> ConversionOutput:
         s3_uri=f"s3://{settings.geozarr_bucket}/{key}",
         bytes_written=len(json.dumps(payload)),
         duration_seconds=duration,
+        scenes=scenes,
     )
