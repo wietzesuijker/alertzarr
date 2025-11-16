@@ -23,7 +23,6 @@ from .alerts import LoadedAlert
 from .catalog import SceneSummary, fetch_eodc_scenes
 from .settings import get_settings
 
-
 LOGGER = logging.getLogger(__name__)
 
 

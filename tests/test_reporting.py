@@ -51,10 +51,7 @@ def test_run_reporter_tracks_steps() -> None:
     assert summary["run_id"] == "test-run"
     assert summary["alert_id"] == "alert-1"
     assert summary["steps"]["stac_item"]["id"] == "alert-1-geozarr"
-    assert (
-        summary["steps"]["conversion"]["viewer"]["viewer_url"]
-        == viewer.viewer_url
-    )
+    assert summary["steps"]["conversion"]["viewer"]["viewer_url"] == viewer.viewer_url
 
 
 def test_run_reporter_persist_writes_file(tmp_path: Path) -> None:

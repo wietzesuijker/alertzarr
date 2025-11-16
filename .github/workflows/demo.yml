@@ -122,43 +122,44 @@ jobs:
         run: |
           mkdir -p artifacts/stac
           python <<'PY'
-import os
-import pathlib
-import boto3
+            import os
+            import pathlib
 
-endpoint = os.environ["MINIO_ENDPOINT"]
-aws_access_key_id = os.environ["MINIO_ACCESS_KEY"]
-aws_secret_access_key = os.environ["MINIO_SECRET_KEY"]
-region_name = os.environ["MINIO_REGION"]
-bucket = os.environ["STAC_BUCKET"]
-dest = pathlib.Path("artifacts/stac")
+            import boto3
 
-s3 = boto3.client(
-    "s3",
-    endpoint_url=endpoint,
-    aws_access_key_id=aws_access_key_id,
-    aws_secret_access_key=aws_secret_access_key,
-    region_name=region_name,
-)
+            endpoint = os.environ["MINIO_ENDPOINT"]
+            aws_access_key_id = os.environ["MINIO_ACCESS_KEY"]
+            aws_secret_access_key = os.environ["MINIO_SECRET_KEY"]
+            region_name = os.environ["MINIO_REGION"]
+            bucket = os.environ["STAC_BUCKET"]
+            dest = pathlib.Path("artifacts/stac")
 
-paginator = s3.get_paginator("list_objects_v2")
-downloaded = 0
-for page in paginator.paginate(Bucket=bucket, Prefix="items/"):
-    for obj in page.get("Contents", []):
-        key = obj["Key"]
-        if not key.endswith(".json"):
-            continue
-        target = dest / os.path.basename(key)
-        s3.download_file(bucket, key, target.as_posix())
-        downloaded += 1
+            s3 = boto3.client(
+                "s3",
+                endpoint_url=endpoint,
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key,
+                region_name=region_name,
+            )
 
-print(f"Downloaded {downloaded} STAC item(s) to {dest}")
-with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-    fh.write(f"count={downloaded}\n")
+            paginator = s3.get_paginator("list_objects_v2")
+            downloaded = 0
+            for page in paginator.paginate(Bucket=bucket, Prefix="items/"):
+                for obj in page.get("Contents", []):
+                    key = obj["Key"]
+                    if not key.endswith(".json"):
+                        continue
+                    target = dest / os.path.basename(key)
+                    s3.download_file(bucket, key, target.as_posix())
+                    downloaded += 1
+
+            print(f"Downloaded {downloaded} STAC item(s) to {dest}")
+            with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+                fh.write(f"count={downloaded}\n")
 PY
 
       - name: Upload generated STAC items
-        if: always() && steps.pull-stac.outputs.count != '0'
+        if: ${{ always() && steps.pull-stac.outputs.count != '0' }}
         uses: actions/upload-artifact@v4
         with:
           name: alertzarr-stac-items

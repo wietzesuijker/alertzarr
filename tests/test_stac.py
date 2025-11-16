@@ -63,8 +63,8 @@ def test_build_stac_item_marks_zarr_assets() -> None:
     output = ConversionOutput(
         alert_id="alert-1",
         bucket="bucket",
-    key="alerts/flood/alert-1-S2A.zarr",
-    s3_uri="s3://bucket/alerts/flood/alert-1-S2A.zarr",
+        key="alerts/flood/alert-1-S2A.zarr",
+        s3_uri="s3://bucket/alerts/flood/alert-1-S2A.zarr",
         bytes_written=10,
         duration_seconds=0.5,
         viewer=viewer,
