@@ -156,7 +156,7 @@ jobs:
             print(f"Downloaded {downloaded} STAC item(s) to {dest}")
             with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
                 fh.write(f"count={downloaded}\n")
-PY
+          PY
 
       - name: Upload generated STAC items
         if: ${{ always() && steps.pull-stac.outputs.count != '0' }}
