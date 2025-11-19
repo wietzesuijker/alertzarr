@@ -85,15 +85,21 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.4.x"
+
+      - name: Cache uv downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-demo-${{ hashFiles('pyproject.toml', 'uv.lock') }}
 
       - name: Install dependencies
-        run: |
-          uv sync
-          uv sync --group dev
+        run: uv sync --group dev
 
       - name: Seed MinIO buckets
         run: uv run python infra/bootstrap_minio.py
@@ -111,10 +117,12 @@ jobs:
             $SCENE_FLAG
 
       - name: Upload run report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: alertzarr-run-report
           path: local/run_reports/*.json
+          if-no-files-found: warn
 
       - name: Download STAC items from MinIO
         id: pull-stac
