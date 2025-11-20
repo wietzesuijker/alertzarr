@@ -16,12 +16,16 @@ from .settings import get_settings
 
 
 def build_stac_item(
-    alert: LoadedAlert, output: ConversionOutput, bucket: str
+    alert: LoadedAlert,
+    output: ConversionOutput,
+    bucket: str,
+    public_base_url: str | None = None,
 ) -> dict[str, Any]:
     geometry = alert.model.area_of_interest
     geom = shape(geometry)
     bbox = list(geom.bounds)
-    item_id = f"{alert.id}-geozarr"
+    collection_id = output.collection_id or "alertzarr-disasters"
+    item_id = output.item_id or f"{alert.id}-geozarr"
     now = datetime.utcnow().isoformat() + "Z"
     is_zarr_store = output.key.endswith(".zarr")
     assets: dict[str, Any] = {
@@ -31,13 +35,39 @@ def build_stac_item(
             "roles": ["data", "zarr"] if is_zarr_store else ["data"],
         }
     }
-    links: list[dict[str, Any]] = [
-        {
-            "rel": "self",
-            "href": f"s3://{bucket}/items/{item_id}.json",
-            "type": "application/json",
-        }
-    ]
+    key = f"items/{item_id}.json"
+    links: list[dict[str, Any]] = []
+    if public_base_url:
+        base = public_base_url.rstrip("/")
+        links.append(
+            {
+                "rel": "self",
+                "href": f"{base}/items/{item_id}.json",
+                "type": "application/json",
+            }
+        )
+        links.append(
+            {
+                "rel": "collection",
+                "href": f"{base}/collections/{collection_id}.json",
+                "type": "application/json",
+            }
+        )
+        links.append(
+            {
+                "rel": "root",
+                "href": base,
+                "type": "application/json",
+            }
+        )
+    else:
+        links.append(
+            {
+                "rel": "self",
+                "href": f"s3://{bucket}/{key}",
+                "type": "application/json",
+            }
+        )
 
     if output.viewer:
         assets["viewer"] = {
@@ -83,7 +113,7 @@ def build_stac_item(
         "type": "Feature",
         "stac_version": "1.0.0",
         "id": item_id,
-        "collection": "alertzarr-disasters",
+        "collection": collection_id,
         "description": alert.model.description,
         "geometry": geometry,
         "bbox": bbox,
@@ -103,7 +133,12 @@ async def create_stac_item(
     alert: LoadedAlert, output: ConversionOutput
 ) -> dict[str, Any]:
     settings = get_settings()
-    stac_item = build_stac_item(alert, output, settings.stac_bucket)
+    stac_item = build_stac_item(
+        alert,
+        output,
+        settings.stac_bucket,
+        public_base_url=settings.stac_public_base_url,
+    )
 
     session = get_session()
     key = f"items/{stac_item['id']}.json"

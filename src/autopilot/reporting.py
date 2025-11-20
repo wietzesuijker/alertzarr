@@ -71,9 +71,14 @@ class RunReporter:
             }
 
     def record_stac_item(self, stac_item: dict[str, Any]) -> None:
+        links = stac_item.get("links", [])
+        self_href = next(
+            (link.get("href") for link in links if link.get("rel") == "self"),
+            "",
+        )
         self.steps["stac_item"] = {
             "id": stac_item.get("id"),
-            "href": stac_item.get("links", [{}])[0].get("href", ""),
+            "href": self_href,
         }
 
     def finish_run(self) -> None:

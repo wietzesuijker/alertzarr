@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     minio_region: str = "us-east-1"
     geozarr_bucket: str = "autopilot-geozarr"
     stac_bucket: str = "autopilot-stac"
+    stac_public_base_url: str | None = None
     real_conversion_enabled: bool = False
     converter_output_prefix: str = "alerts"
     converter_collection: str = "sentinel-2-l2a"

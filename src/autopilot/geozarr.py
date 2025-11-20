@@ -45,6 +45,8 @@ class ConversionOutput:
     s3_uri: str
     bytes_written: int
     duration_seconds: float
+    collection_id: str | None = None
+    item_id: str | None = None
     scenes: list[SceneSummary] = field(default_factory=list)
     viewer: ViewerLinks | None = None
 
@@ -79,6 +81,9 @@ async def simulate_conversion(
     session = get_session()
     settings = get_settings()
 
+    collection_source = alert.model.hazard_type or settings.converter_collection
+    collection_id = _slugify(collection_source)
+    item_id = _slugify(f"{alert.id}-placeholder")
     key = f"alerts/{alert.model.hazard_type}/{alert.id}/geozarr-placeholder.json"
     scenes: list[SceneSummary] = []
     if include_scene_search:
@@ -117,6 +122,8 @@ async def simulate_conversion(
         s3_uri=f"s3://{settings.geozarr_bucket}/{key}",
         bytes_written=len(json.dumps(payload)),
         duration_seconds=duration,
+        collection_id=collection_id,
+        item_id=item_id,
         scenes=scenes,
     )
 
@@ -147,6 +154,8 @@ async def _attempt_real_conversion(alert: LoadedAlert) -> ConversionOutput | Non
         s3_uri=output_uri,
         bytes_written=bytes_written,
         duration_seconds=duration,
+        collection_id=collection_id,
+        item_id=item_id,
         scenes=[selected],
         viewer=viewer,
     )
