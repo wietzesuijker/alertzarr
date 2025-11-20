@@ -224,9 +224,10 @@ def _build_output_layout(
 def _build_viewer_links(
     settings, collection_id: str, item_id: str
 ) -> ViewerLinks | None:
-    if not settings.titiler_base_url:
-        return None
-    base_url = settings.titiler_base_url.rstrip("/")
+    base_url = settings.titiler_base_url
+    if not base_url:
+        raise RuntimeError("TITILER_BASE_URL must be configured")
+    base_url = base_url.rstrip("/")
     tile_matrix = settings.titiler_tile_matrix_set
     root = f"{base_url}/collections/{collection_id}/items/{item_id}"
     return ViewerLinks(

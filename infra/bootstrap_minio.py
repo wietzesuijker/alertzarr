@@ -1,4 +1,5 @@
 """Seed MinIO buckets required for the MVP."""
+
 from __future__ import annotations
 
 import asyncio
@@ -8,11 +9,15 @@ import os
 from aiobotocore.session import get_session
 
 LOGGER = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
+)
 
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "http://localhost:9000")
-ACCESS_KEY = os.getenv("MINIO_ROOT_USER", "autopilot")
-SECRET_KEY = os.getenv("MINIO_ROOT_PASSWORD", "autopilot123")
+ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY") or os.getenv("MINIO_ROOT_USER", "autopilot")
+SECRET_KEY = os.getenv("MINIO_SECRET_KEY") or os.getenv(
+    "MINIO_ROOT_PASSWORD", "autopilot123"
+)
 REGION = os.getenv("MINIO_REGION", "us-east-1")
 
 BUCKETS = [

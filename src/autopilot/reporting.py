@@ -6,6 +6,7 @@ import json
 import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -25,10 +26,12 @@ class RunReporter:
     finished_at: float = field(default=0.0, init=False)
     alert_id: str | None = field(default=None, init=False)
     steps: dict[str, Any] = field(default_factory=dict, init=False)
+    status: str = field(default="initialized", init=False)
 
     def start_run(self) -> None:
         self.run_id = self.run_id or uuid.uuid4().hex
         self.started_at = time.time()
+        self.status = "running"
 
     def record_alert(self, alert: LoadedAlert) -> None:
         self.alert_id = alert.id
@@ -83,6 +86,8 @@ class RunReporter:
 
     def finish_run(self) -> None:
         self.finished_at = time.time()
+        if self.status != "failed":
+            self.status = "succeeded"
 
     def summary(self) -> dict[str, Any]:
         if self.finished_at and self.started_at:
@@ -94,6 +99,7 @@ class RunReporter:
             "alert_id": self.alert_id,
             "duration_seconds": round(duration, 2),
             "steps": self.steps,
+            "status": self.status,
         }
 
     def persist(self, directory: Path) -> Path:
@@ -101,6 +107,23 @@ class RunReporter:
         path = directory / f"{self.run_id}.json"
         path.write_text(json.dumps(self.summary(), indent=2), encoding="utf-8")
         return path
+
+    def emit_metrics(self, metrics_path: Path) -> Path:
+        metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "run_id": self.run_id,
+            "alert_id": self.alert_id,
+            "status": self.status,
+            "duration_seconds": self.summary().get("duration_seconds", 0.0),
+            "bytes_written": self.steps.get("conversion", {}).get("bytes_written"),
+            "source_scene_count": self.steps.get("conversion", {}).get(
+                "source_scene_count", 0
+            ),
+        }
+        with metrics_path.open("a", encoding="utf-8") as fp:
+            fp.write(json.dumps(entry) + "\n")
+        return metrics_path
 
 
 def _area_km2(geometry: dict[str, Any]) -> float | None:

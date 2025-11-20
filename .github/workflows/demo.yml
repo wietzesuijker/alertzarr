@@ -25,9 +25,9 @@ on:
           - real
           - simulate
       titiler-base-url:
-        description: Optional TiTiler base URL (leave blank to skip viewer links)
-        required: false
-        default: ""
+        description: TiTiler base URL used for viewer links
+        required: true
+        default: http://localhost:8080
       titiler-tile-matrix-set:
         description: TileMatrixSet id used when composing TileJSON URLs
         required: false
@@ -54,6 +54,7 @@ jobs:
       MINIO_REGION: us-east-1
       GEOZARR_BUCKET: autopilot-geozarr
       STAC_BUCKET: autopilot-stac
+      STAC_PUBLIC_BASE_URL: https://demo.alertzarr.dev/stac
       REAL_CONVERSION_ENABLED: "true"
       EODC_STAC_API: https://stac.core.eopf.eodc.eu
       EODC_S3_ENDPOINT: https://s3.de.io.cloud.ovh.net
@@ -80,6 +81,30 @@ jobs:
           done
           echo "MinIO failed to start" >&2
           docker logs minio >&2 || true
+          exit 1
+
+      - name: Start TiTiler service
+        run: |
+          docker run -d \
+            --name titiler \
+            --add-host=host.docker.internal:host-gateway \
+            -p 8080:80 \
+            -e AWS_ACCESS_KEY_ID=autopilot \
+            -e AWS_SECRET_ACCESS_KEY=autopilot123 \
+            -e AWS_DEFAULT_REGION=us-east-1 \
+            -e AWS_ENDPOINT_URL=http://host.docker.internal:9000 \
+            -e TITILER_EOPF_STORE_URL=s3://autopilot-geozarr/ \
+            -e TITILER_EOPF_API_CORS_ORIGINS=* \
+            ghcr.io/eopf-explorer/titiler-eopf:latest
+          for i in {1..20}; do
+            if curl -sf http://localhost:8080/_mgmt/ping >/dev/null; then
+              echo "TiTiler is ready"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "TiTiler failed to start" >&2
+          docker logs titiler >&2 || true
           exit 1
 
       - name: Set up Python
@@ -142,6 +167,8 @@ jobs:
           name: alertzarr-stac-items
           path: artifacts/stac/*.json
 
-      - name: Stop MinIO service
+      - name: Stop services
         if: always()
-        run: docker rm -f minio || true
+        run: |
+          docker rm -f titiler || true
+          docker rm -f minio || true

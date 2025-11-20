@@ -14,13 +14,13 @@ from rich.table import Table
 from .alerts import load_alert
 from .events import publish_alert_event
 from .geozarr import ConversionMode, convert_alert
+from .logging_utils import configure_logging
 from .reporting import RunReporter
+from .settings import get_settings
 from .stac import create_stac_item
 
+configure_logging()
 LOGGER = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
-)
 CONSOLE = Console()
 
 
@@ -32,6 +32,7 @@ async def orchestrate(
     report_dir: Path | None = None,
     conversion_mode: ConversionMode = "auto",
 ) -> None:
+    settings = get_settings()
     reporter = RunReporter(run_id=run_id)
     reporter.start_run()
 
@@ -45,34 +46,39 @@ async def orchestrate(
     reporter.record_event_publish()
     CONSOLE.print("Published alert to RabbitMQ")
 
+    report_path: Path | None = None
     try:
         geozarr_output = await convert_alert(
             alert,
             include_scene_search=not no_scene_search,
             mode=conversion_mode,
         )
-    except RuntimeError as exc:
-        raise SystemExit(str(exc)) from exc
-    reporter.record_conversion(geozarr_output)
-    artifact = "GeoZarr" if geozarr_output.key.endswith(".zarr") else "placeholder JSON"
-    CONSOLE.print(f"Wrote {artifact} artefact to {geozarr_output.s3_uri}")
-    scene_count = len(geozarr_output.scenes)
-    if scene_count:
-        scene_ids = ", ".join(scene.id for scene in geozarr_output.scenes)
-        CONSOLE.print(
-            f"Found {scene_count} Sentinel scene(s) intersecting the AOI: {scene_ids}"
+        reporter.record_conversion(geozarr_output)
+        artifact = (
+            "GeoZarr" if geozarr_output.key.endswith(".zarr") else "placeholder JSON"
         )
-    else:
-        CONSOLE.print("No Sentinel-2 scenes matched the EODC search criteria")
+        CONSOLE.print(f"Wrote {artifact} artefact to {geozarr_output.s3_uri}")
+        scene_count = len(geozarr_output.scenes)
+        if scene_count:
+            scene_ids = ", ".join(scene.id for scene in geozarr_output.scenes)
+            CONSOLE.print(
+                f"Found {scene_count} Sentinel scene(s) intersecting the AOI: {scene_ids}"
+            )
+        else:
+            CONSOLE.print("No Sentinel-2 scenes matched the EODC search criteria")
 
-    stac_item = await create_stac_item(alert, geozarr_output)
-    reporter.record_stac_item(stac_item)
-    CONSOLE.print(f"Created STAC Item: {stac_item['id']}")
+        stac_item = await create_stac_item(alert, geozarr_output)
+        reporter.record_stac_item(stac_item)
+        CONSOLE.print(f"Created STAC Item: {stac_item['id']}")
+    except RuntimeError as exc:
+        reporter.status = "failed"
+        raise SystemExit(str(exc)) from exc
+    finally:
+        reporter.finish_run()
+        reporter.emit_metrics(Path(settings.metrics_path))
+        if report_dir is not None:
+            report_path = reporter.persist(report_dir)
 
-    reporter.finish_run()
-    report_path: Path | None = None
-    if report_dir is not None:
-        report_path = reporter.persist(report_dir)
     CONSOLE.print("[bold green]Pipeline completed successfully[/bold green]")
 
     table = Table(title="Run Summary")

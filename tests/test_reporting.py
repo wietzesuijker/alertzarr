@@ -50,6 +50,7 @@ def test_run_reporter_tracks_steps() -> None:
     summary = reporter.summary()
     assert summary["run_id"] == "test-run"
     assert summary["alert_id"] == "alert-1"
+    assert summary["status"] == "succeeded"
     assert summary["steps"]["stac_item"]["id"] == "alert-1-geozarr"
     assert summary["steps"]["conversion"]["viewer"]["viewer_url"] == viewer.viewer_url
 
@@ -80,3 +81,31 @@ def test_run_reporter_persist_writes_file(tmp_path: Path) -> None:
     data = json.loads(output_path.read_text())
     assert data["run_id"] == "persist-test"
     assert data["steps"]["alert"]["id"] == "alert-2"
+
+
+def test_emit_metrics_appends_json_lines(tmp_path: Path) -> None:
+    reporter = RunReporter(run_id="metrics-test")
+    reporter.start_run()
+
+    class FakeAlert:
+        id = "alert-3"
+
+        class Model:
+            issued = "2025-03-01T00:00:00Z"
+            hazard_type = "cyclone"
+            severity = "high"
+
+        model = Model()
+
+    reporter.record_alert(FakeAlert())
+    reporter.record_event_publish()
+    reporter.finish_run()
+
+    metrics_path = tmp_path / "metrics.jsonl"
+    reporter.emit_metrics(metrics_path)
+
+    lines = metrics_path.read_text().strip().splitlines()
+    assert len(lines) == 1
+    entry = json.loads(lines[0])
+    assert entry["run_id"] == "metrics-test"
+    assert entry["status"] == "succeeded"
