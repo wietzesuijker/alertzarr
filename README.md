@@ -1,218 +1,61 @@
 # AlertZarr
 
-AlertZarr ingests disaster alerts, looks up recent Sentinel-2 scenes over the AOI, and converts the freshest **EODC Zarr v2** scene to GeoZarr (via `eopf-geozarr`). All scene discovery now occurs through the EODC STAC API so previews, metadata, and Zarr download links share a single authoritative source. When no eligible EODC Zarr exists the run clearly falls back to the legacy placeholder artefact. It always emits a STAC Item + run report you can hand to downstream tooling. Run it locally or pull the container published to `ghcr.io/wietzesuijker/alertzarr`. The pipeline produces:
+AlertZarr converts disaster alerts into GeoZarr artefacts plus matching STAC items. The CLI takes an alert payload, looks up fresh Sentinel-2 scenes through the EODC STAC API, runs `eopf-geozarr` to build the GeoZarr store, and records the result inside a run report.
 
-1. Normalised disaster alerts from sample feeds.
-2. Real GeoZarr conversion artefacts (or a clearly-labelled placeholder when real data is unavailable).
-3. Generated STAC Items that reference the produced data.
-4. A run report capturing timing, status, and links for downstream consumers.
+## Workflow
+1. Validate the alert input (`autopilot.alerts`).
+2. (Optional) emit a CloudEvents message via RabbitMQ (`autopilot.events`).
+3. Discover recent Sentinel-2 L2A scenes intersecting the AOI (`autopilot.catalog`).
+4. Convert the newest eligible Zarr v2 scene to GeoZarr or fall back to the placeholder (`autopilot.geozarr`).
+5. Publish a STAC Item and persist a run report (`autopilot.stac`, `autopilot.reporting`).
 
-RabbitMQ, MinIO, and Postgres run via `docker-compose`, and the CLI (`alertzarr`) coordinates the alert-to-product flow. Configuration lives in `.env` (copy `.env.example`). GitHub Actions builds + pushes container images from `main` and tags, mirroring the `data-pipeline` release flow. The same execution steps map to hosted queues/object stores or Argo Workflows when deployed elsewhere.
+Dependencies: Python 3.11+, `uv` for dependency management, and RabbitMQ + MinIO via `docker-compose`. Copy `.env.example` to `.env` to configure credentials.
 
-## What the pipeline actually does
-
-1. **Load & normalise the alert** (`autopilot.alerts`). AOI polygons and hazard metadata are validated via Pydantic.
-2. **Publish a CloudEvents message** (`autopilot.events`) to RabbitMQ so other systems can react.
-3. **Discover up to two recent Sentinel-2 scenes** (`autopilot.catalog`) intersecting the AOI using the EODC STAC API (one request returns thumbnails, metadata, and Sentinel-2 L2A Zarr v2 assets).
-4. **Convert the freshest EODC Zarr v2 scene to GeoZarr** (`autopilot.geozarr`) via `eopf-geozarr`, writing the multiscale store to MinIO. If no EODC Zarr scene is available, a placeholder JSON artefact is produced so downstream steps still succeed.
-5. **Generate a STAC Item** (`autopilot.stac`) that references the GeoZarr artefact and links to the source scenes.
-6. **Persist a run report** (`autopilot.reporting`) detailing timing, AOI size, and output URIs.
-
-The GeoZarr artefact is intentionally minimal today; it demonstrates where downstream converters would slot in while keeping the pipeline runnable without massive workloads.
-
-## Features
-- Fetch & normalise sample Copernicus/GDACS alerts.
-- Publish alerts to RabbitMQ as CloudEvents messages.
-- Query the **EODC STAC API** for Sentinel-2 L2A Zarr v2 assets (the same API response also includes thumbnails/true-color previews for context).
-- Run real GeoZarr conversions via `eopf-geozarr`, writing outputs to MinIO/S3 (with an explicit placeholder fallback when no EODC Zarr is available).
-- Generate STAC Item JSON and upload it to MinIO alongside derived assets.
-- Emit TiTiler-ready viewer + TileJSON links whenever `TITILER_BASE_URL` is configured so you can open the converted GeoZarr immediately.
-- Emit a run summary with timestamps, source scene metadata, and output URLs.
-
-The intent of this repository is to demonstrate an end-to-end, automation-ready path from disaster alert ingestion to **real GeoZarr artefacts built from the EODC catalog**. Keeping scene discovery fully within the EODC STAC ecosystem ensures reproducible metadata, consistent permissions, and fewer moving parts.
-
-## Repository Layout
+## Repository layout
 ```
-.
-├── README.md
-├── docker-compose.yaml            # Local infrastructure (RabbitMQ, MinIO, Postgres, MinIO console)
-├── Makefile                       # Convenience commands
-├── pyproject.toml                 # Python project metadata (install via `uv` or `pip`)
-├── data/
-│   └── sample_alerts/             # Static alert payloads for quick runs
-├── infra/
-│   └── bootstrap_minio.py         # Seeds MinIO buckets and credentials for development
-├── src/
-│   └── autopilot/
-│       ├── __init__.py
-│       ├── alerts.py              # Alert ingestion + normalisation
-│       ├── cli.py                 # Command-line entry point
-│       ├── events.py              # RabbitMQ publishers/subscribers
-│       ├── geozarr.py             # Placeholder GeoZarr conversion logic
-│       ├── reporting.py           # Run summaries and logging helpers
-│       └── stac.py                # STAC item generation
-└── .github/workflows/             # CI + GHCR publishing pipeline
+├── data/sample_alerts/        Sample alert payloads
+├── infra/bootstrap_minio.py   Seeds local MinIO buckets
+├── scripts/download_stac_items.py
+├── src/autopilot/             CLI + pipeline modules
+├── tests/                     Unit tests
+└── docker-compose.yaml        RabbitMQ + MinIO services
 ```
 
-## Quickstart
-1. **Install prerequisites**
-   - Python 3.11+
-   - [`uv`](https://github.com/astral-sh/uv) (or use `pip`) for dependency management
-   - Docker / Docker Compose
-
-2. **Install Python dependencies**
-   ```bash
-   uv sync
-   ```
-
-3. **Start local services**
-   ```bash
-   make up
-   # waits until MinIO + RabbitMQ report healthy
-   ```
-
-4. **Seed MinIO (optional)**
-   ```bash
-   uv run python infra/bootstrap_minio.py
-   ```
-
-5. **Run the pipeline**
-   ```bash
-   uv run alertzarr \
-       --alert copernicus_flood.json \
-     --hazard flood
-   ```
-    The `--alert` flag is relative to `data/sample_alerts/`.
-    Each invocation writes a run summary JSON under `local/run_reports/<run_id>.json` by default.
-   Use `--report-dir /custom/path` to override the destination.
-
-6. **Inspect results**
-   - MinIO: http://localhost:9001 (default creds `autopilot/autopilot123`)
-   - RabbitMQ: http://localhost:15672 (`guest/guest`)
-   - STAC Item: see path logged in the run summary.
-   - Run summaries: `local/run_reports/<run_id>.json` (or the directory passed via `--report-dir`).
-
-## Real GeoZarr conversion (EODC Zarr v2)
-
-AlertZarr can now reuse the **EODC sentinel-2-l2a Zarr v2 corpus** to produce real GeoZarr stores using the upstream `eopf-geozarr` library. Toggle it via environment or CLI:
-
-1. Configure access (defaults work for the public EODC bucket + local MinIO):
-
-   ```bash
-   export REAL_CONVERSION_ENABLED=true
-   export EODC_STAC_API=https://stac.core.eopf.eodc.eu
-   export EODC_S3_ENDPOINT=https://s3.de.io.cloud.ovh.net
-   export MINIO_ENDPOINT=http://localhost:9000
-   export MINIO_ROOT_USER=autopilot
-   export MINIO_ROOT_PASSWORD=autopilot123
-   # Optional TiTiler integration (local server example shown below)
-   export TITILER_BASE_URL=http://127.0.0.1:8080
-   export TITILER_TILE_MATRIX_SET=WebMercatorQuad
-   ```
-
-   Adjust the env vars if you are writing to a remote S3 bucket or a different STAC catalog.
-
-2. Run the CLI with `--conversion-mode real` (or leave it on `auto`, which will attempt real conversion and fall back to the placeholder when needed):
-
-   ```bash
-   uv run alertzarr \
-       --alert copernicus_flood.json \
-       --hazard flood \
-       --conversion-mode real
-   ```
-
-3. Inspect the MinIO bucket: the artefact now ends with `.zarr`, `report.json` notes `"mode": "real"`, and the STAC Item advertises an `application/vnd+zarr` asset pointing at the converted store.
-
-Internally the flow matches the production `data-pipeline` implementation: AlertZarr queries the EODC STAC API, resolves the public Zarr v2 asset in `s3://esa-zarr-sentinel-explorer-fra`, and streams it through `eopf-geozarr` to build GeoZarr multiscales. This keeps the demo realistic today while we prepare for the Zarr v3 / GeoZarr-native sources the EODC catalog will expose next.
-
-### Preview the GeoZarr with TiTiler-EOPF
-
-AlertZarr now emits viewer metadata whenever you set `TITILER_BASE_URL`. Point that variable at an existing TiTiler-EOPF deployment, or just run the bundled service with Docker Compose:
-
+## Run locally
 ```bash
-make titiler  # starts ghcr.io/eopf-explorer/titiler-eopf with the same MinIO creds
+uv sync                                  # install dependencies
+make up                                  # start RabbitMQ + MinIO
+uv run python infra/bootstrap_minio.py   # optional bucket bootstrap
+uv run alertzarr --alert copernicus_flood.json --hazard flood
 ```
 
-Back in the `alertzarr` repo, set `TITILER_BASE_URL=http://127.0.0.1:8080` and rerun the CLI. Successful real conversions now add a `viewer` and `tilejson` asset to the STAC Item plus a `conversion.viewer` block inside the run report. Share those URLs with your TiTiler deployment to get instant RGB previews of the freshly produced GeoZarr store.
+Outputs land under `local/run_reports/<run_id>.json` and in the MinIO buckets defined in `.env`. Use `--conversion-mode real|auto|simulate`, `--report-dir`, or `--no-scene-search` to adapt behaviour.
 
-## Run from GitHub Actions
+## Development shortcuts
+- `uv run ruff check src`
+- `uv run pytest`
+- `make down`
 
-Use the `Demo AlertZarr` workflow (`.github/workflows/demo.yml`) to execute the same steps on a GitHub-hosted runner. Trigger it via **Actions → Demo AlertZarr → Run workflow** and pick:
+## Automation
+The `Demo AlertZarr` workflow (`.github/workflows/demo.yml`) runs the CLI on GitHub Actions, seeds RabbitMQ/MinIO, and uploads the run report plus generated STAC items. The default CI workflow (`.github/workflows/build.yml`) handles linting, tests, and publishing the container image to GHCR.
 
-- `alert` / `hazard`: which sample payload to run.
-- `run-scene-search`: leave enabled to hit the EODC STAC API.
-- `conversion-mode`: defaults to `real` so the workflow always builds a GeoZarr (falling back only if no scenes are found).
-- `titiler-base-url` (optional): point at a reachable TiTiler deployment to embed viewer + TileJSON links in the artifacts. Leave blank to skip.
-- `titiler-tile-matrix-set`: override if your TiTiler uses something other than `WebMercatorQuad`.
-
-Each run uploads two artifacts:
-
-1. `alertzarr-run-report` – the structured run summary from `local/run_reports`.
-2. `alertzarr-stac-items` – any STAC Items written to the MinIO `autopilot-stac` bucket during the run, downloaded back via the workflow for convenience.
-
-## Next Steps
-- Replace sample alerts with live API polling and webhook integrations.
-- Swap the conversion stub with real `eopf-geozarr` workflows and Argo templates.
-- Integrate Prometheus/Grafana dashboards for run observability.
-- Package as reusable Helm charts/Kustomize overlays once production-ready.
-
-7. **Run the unit tests**
-   ```bash
-   uv run pytest
-   ```
-
-8. **Build container locally (optional)**
-   ```bash
-   docker build -t alertzarr:local .
-   docker run --rm alertzarr:local --help
-   ```
-
-## Publishing & GHCR Flow
-
-- **Push to GitHub**: commits to `main` (or version tags like `v0.2.0`) trigger `.github/workflows/build.yml`. No extra secrets are required because the workflow uses `${{ secrets.GITHUB_TOKEN }}` to authenticate to GHCR.
-- **CI stages**: lint (`ruff`), tests (`pytest`), then Docker build + push. Pull requests build but skip pushing the container image.
-- **Image tags**: successful pushes publish `ghcr.io/wietzesuijker/alertzarr:${GITHUB_SHA}` and `ghcr.io/wietzesuijker/alertzarr:latest`.
-- **Using the image**:
-   ```bash
-   docker pull ghcr.io/wietzesuijker/alertzarr:latest
-   docker run --rm ghcr.io/wietzesuijker/alertzarr:latest --help
-   ```
-
-If you fork the repo, adjust the workflow tags/owner and ensure `packages: write` permissions stay enabled so your GitHub token can push to your GHCR namespace.
-
-## Example run summary
-
-The CLI persists a machine-readable report for every invocation. Example (truncated) output from `local/run_reports/584654539a3a45cc8eac07ce07ae14c2.json`:
-
+## Run report example
 ```json
 {
-   "run_id": "584654539a3a45cc8eac07ce07ae14c2",
-   "alert_id": "COP_EMS_2025_000123",
-   "steps": {
-      "alert": {
-         "hazard": "flood",
-         "severity": "Severe",
-         "area_km2": 391.0
-      },
-      "conversion": {
-         "s3_uri": "s3://autopilot-geozarr/alerts/flood/COP_EMS_2025_000123/geozarr-placeholder.json",
-         "source_scene_ids": [
-            "S2A_29SND_20251002_0_L2A",
-            "S2C_29SND_20250930_0_L2A"
-         ]
-      },
-      "stac_item": {
-         "href": "s3://autopilot-stac/items/COP_EMS_2025_000123-geozarr.json"
-      }
-   }
+  "run_id": "584654539a3a45cc8eac07ce07ae14c2",
+  "alert_id": "COP_EMS_2025_000123",
+  "steps": {
+    "hazard": "flood",
+    "conversion": {
+      "s3_uri": "s3://autopilot-geozarr/alerts/flood/COP_EMS_2025_000123/geozarr-placeholder.json"
+    }
+  }
 }
 ```
 
-Use these reports to feed dashboards, attach to Slack alerts, or trigger downstream conversions once the real GeoZarr step is wired up.
+Refer to `local/run_reports` for the latest outputs or downstream automation hooks.
 
-## Current scope & limitations
-
-- Real conversion currently targets **Sentinel-2 L2A Zarr v2** scenes exposed via the EODC catalog. If none intersect the alert AOI, AlertZarr falls back to the previous JSON stub so the run still produces a STAC Item.
-- Scene discovery relies on the EODC STAC API and remains best-effort. Network errors simply log a warning and continue.
-- The pipeline targets the sample Copernicus alerts included in `data/sample_alerts/`. Bring your own alerts by dropping JSON files with the same schema.
-- TiTiler visualisation requires a reachable `TITILER_BASE_URL`. Provide one (local or remote) so AlertZarr can emit working viewer + TileJSON links.
+## Scope hints
+- Conversion currently targets Sentinel-2 L2A Zarr v2 scenes exposed via the EODC catalog. If no scene intersects the AOI, the pipeline falls back to the JSON placeholder so STAC + reporting still succeed.
+- TiTiler links are emitted only when `TITILER_BASE_URL` is configured.
+- Add your own alerts by dropping JSON files that match the sample schema into `data/sample_alerts/`.

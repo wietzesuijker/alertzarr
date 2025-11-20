@@ -115,10 +115,6 @@ def test_build_stac_item_uses_public_base_url_for_links() -> None:
     )
     hrefs = {link["rel"]: link["href"] for link in item["links"]}
     assert (
-        hrefs["self"]
-        == "https://data.example.com/stac/items/alert-1-placeholder.json"
+        hrefs["self"] == "https://data.example.com/stac/items/alert-1-placeholder.json"
     )
-    assert (
-        hrefs["collection"]
-        == "https://data.example.com/stac/collections/flood.json"
-    )
+    assert hrefs["collection"] == "https://data.example.com/stac/collections/flood.json"

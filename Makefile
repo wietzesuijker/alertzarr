@@ -5,16 +5,17 @@ PYTHON ?= uv run python
 up:
 	docker compose up -d --wait
 
-logs:
-	docker compose logs -f
-	down:
+down:
 	docker compose down -v
 
+logs:
+	docker compose logs -f
+
 lint:
-	uv run ruff check src infra
+	uv run ruff check src
 
 format:
-	uv run ruff format src infra
+	uv run ruff format src
 
 test:
 	uv run pytest

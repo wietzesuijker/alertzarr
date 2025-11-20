@@ -3,3 +3,9 @@ __pycache__/
 .venv/
 local/
 .env
+.coverage
+coverage-report/
+.hypothesis/
+.pytest_cache/
+.ruff_cache/
+.benchmarks/
